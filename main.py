@@ -19,59 +19,152 @@ from game.settings import (
 from game.player import Player
 from game.bullet import Bullet
 from game.meteor import Meteor
+from game.explosion import Explosion
 from game.collision import check_bullet_meteor_collisions
+from game.ui import draw_hud, draw_game_over
+from game.audio import create_game_sounds
 
 
-# Initialize Pygame
-pygame.init()
+# ==========================================
+# INITIALIZE PYGAME AND AUDIO
+# ==========================================
 
-# Create window
+pygame.mixer.pre_init(
+    frequency=44100,
+    size=-16,
+    channels=1,
+    buffer=512
+)
+
+try:
+    pygame.mixer.init(
+        frequency=44100,
+        size=-16,
+        channels=1,
+        buffer=512
+    )
+except pygame.error as exc:
+    raise RuntimeError(
+        "Pygame could not open an audio device. Run the game with Windows "
+        "Python (not the WSL interpreter) and verify that Windows has an "
+        "active output device."
+    ) from exc
+
+pygame.display.init()
+pygame.font.init()
+
+
+# ==========================================
+# CREATE GAME WINDOW
+# ==========================================
+
 screen = pygame.display.set_mode(
     (SCREEN_WIDTH, SCREEN_HEIGHT)
 )
 
 pygame.display.set_caption(GAME_TITLE)
 
-# Game clock
 clock = pygame.time.Clock()
+
 font = pygame.font.Font(None, 30)
+big_font = pygame.font.Font(None, 80)
 
-# Create player
-player = Player()
 
-# Create bullets
+# ==========================================
+# CREATE GAME SOUNDS
+# ==========================================
+
+sounds = create_game_sounds()
+
+
+# ==========================================
+# BACKGROUND STARS
+# ==========================================
+
+stars = []
+
+for _ in range(80):
+
+    x = random.randint(0, SCREEN_WIDTH)
+    y = random.randint(0, SCREEN_HEIGHT)
+
+    stars.append((x, y))
+
+
+# ==========================================
+# GAME VARIABLES
+# ==========================================
+
+player = None
+
 bullets = []
-
-# Create meteorites
 meteors = []
+explosions = []
 
-# Player health and score
 health = PLAYER_HEALTH
 score = 0
 
-# Meteor spawn timer
 meteor_spawn_timer = 0
 bullet_fire_timer = 0
 elapsed_time = 0
 
-# Generate background stars
-stars = []
-
-for _ in range(80):
-    x = random.randint(0, SCREEN_WIDTH)
-    y = random.randint(0, SCREEN_HEIGHT)
-    stars.append((x, y))
+game_over = False
 
 
-# Main game loop
+# ==========================================
+# RESET GAME
+# ==========================================
+
+def reset_game():
+
+    global player
+    global bullets
+    global meteors
+    global explosions
+
+    global health
+    global score
+
+    global meteor_spawn_timer
+    global bullet_fire_timer
+    global elapsed_time
+
+    global game_over
+
+    player = Player()
+
+    bullets = []
+    meteors = []
+    explosions = []
+
+    health = PLAYER_HEALTH
+    score = 0
+
+    meteor_spawn_timer = 0
+    bullet_fire_timer = 0
+    elapsed_time = 0
+
+    game_over = False
+
+
+# Start game
+reset_game()
+
+
+# ==========================================
+# MAIN GAME LOOP
+# ==========================================
+
 running = True
 
 while running:
 
-    # Calculate delta time
     dt = clock.tick(FPS) / 1000
 
-    # Handle events
+    # --------------------------------------
+    # HANDLE EVENTS
+    # --------------------------------------
+
     for event in pygame.event.get():
 
         if event.type == pygame.QUIT:
@@ -82,59 +175,163 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
 
+            # Restart game
+            if game_over and event.key == pygame.K_r:
+                reset_game()
+
+
     # Get keyboard input
     keys = pygame.key.get_pressed()
 
-    # Keep shooting automatically, starting immediately
-    bullet_fire_timer += dt * 1000
-    if bullet_fire_timer >= BULLET_FIRE_INTERVAL:
-        bullets.append(Bullet(player.rect.centerx, player.rect.top))
-        bullet_fire_timer = 0
 
-    # Update player
-    player.update(keys, dt)
+    # ======================================
+    # GAMEPLAY
+    # ======================================
 
-    # Update bullets
-    for bullet in bullets[:]:
+    if not game_over:
 
-        bullet.update(dt)
+        # ----------------------------------
+        # AUTOMATIC SHOOTING
+        # ----------------------------------
 
-        if bullet.is_off_screen():
-            bullets.remove(bullet)
+        bullet_fire_timer += dt * 1000
 
-    # Spawn meteorites
-    meteor_spawn_timer += dt * 1000
-    elapsed_time += dt
+        if bullet_fire_timer >= BULLET_FIRE_INTERVAL:
 
-    if meteor_spawn_timer >= METEOR_SPAWN_INTERVAL:
+            bullets.append(
+                Bullet(
+                    player.rect.centerx,
+                    player.rect.top
+                )
+            )
 
-        meteors.append(Meteor(elapsed_time))
+            sounds["shoot"].play()
 
-        meteor_spawn_timer = 0
+            bullet_fire_timer = 0
 
-    # Update meteorites
-    for meteor in meteors[:]:
 
-        meteor.update(dt)
+        # ----------------------------------
+        # UPDATE PLAYER
+        # ----------------------------------
 
-        if meteor.is_off_screen():
-            meteors.remove(meteor)
+        player.update(keys, dt)
 
-    # Check bullet and meteor collisions
-    destroyed_meteors = check_bullet_meteor_collisions(bullets, meteors)
-    score += destroyed_meteors * METEOR_SCORE
 
-    # Meteors damage the player on contact and are removed after the collision
-    for meteor in meteors[:]:
-        if player.rect.colliderect(meteor.rect):
-            meteors.remove(meteor)
-            health = max(0, health - 1)
+        # ----------------------------------
+        # UPDATE BULLETS
+        # ----------------------------------
 
-    # Draw background
+        for bullet in bullets[:]:
+
+            bullet.update(dt)
+
+            if bullet.is_off_screen():
+                bullets.remove(bullet)
+
+
+        # ----------------------------------
+        # SPAWN METEORS
+        # ----------------------------------
+
+        meteor_spawn_timer += dt * 1000
+        elapsed_time += dt
+
+        if meteor_spawn_timer >= METEOR_SPAWN_INTERVAL:
+
+            meteors.append(Meteor(elapsed_time))
+
+            meteor_spawn_timer = 0
+
+
+        # ----------------------------------
+        # UPDATE METEORS
+        # ----------------------------------
+
+        for meteor in meteors[:]:
+
+            meteor.update(dt)
+
+            if meteor.is_off_screen():
+                meteors.remove(meteor)
+
+
+        # ----------------------------------
+        # BULLET AND METEOR COLLISIONS
+        # ----------------------------------
+
+        destroyed_meteors = check_bullet_meteor_collisions(
+            bullets,
+            meteors
+        )
+
+
+        # ----------------------------------
+        # UPDATE SCORE
+        # ----------------------------------
+
+        score += len(destroyed_meteors) * METEOR_SCORE
+
+
+        # ----------------------------------
+        # CREATE EXPLOSIONS
+        # ----------------------------------
+
+        for position in destroyed_meteors:
+
+            explosions.append(
+                Explosion(
+                    position[0],
+                    position[1]
+                )
+            )
+
+            sounds["explosion"].play()
+
+
+        # ----------------------------------
+        # METEOR AND PLAYER COLLISIONS
+        # ----------------------------------
+
+        for meteor in meteors[:]:
+
+            if player.rect.colliderect(meteor.rect):
+
+                meteors.remove(meteor)
+
+                health = max(0, health - 1)
+
+                sounds["damage"].play()
+
+
+        # ----------------------------------
+        # CHECK GAME OVER
+        # ----------------------------------
+
+        if health <= 0:
+
+            game_over = True
+
+
+    # ======================================
+    # UPDATE EXPLOSIONS
+    # ======================================
+
+    for explosion in explosions[:]:
+
+        explosion.update(dt)
+
+        if explosion.is_finished():
+            explosions.remove(explosion)
+
+
+    # ======================================
+    # DRAW BACKGROUND
+    # ======================================
+
     screen.fill(BLACK)
 
-    # Draw stars
     for star in stars:
+
         pygame.draw.circle(
             screen,
             WHITE,
@@ -142,27 +339,71 @@ while running:
             1
         )
 
-    # Draw bullets
+
+    # ======================================
+    # DRAW BULLETS
+    # ======================================
+
     for bullet in bullets:
         bullet.draw(screen)
 
-    # Draw meteorites
+
+    # ======================================
+    # DRAW METEORS
+    # ======================================
+
     for meteor in meteors:
         meteor.draw(screen)
 
-    # Draw player
+
+    # ======================================
+    # DRAW EXPLOSIONS
+    # ======================================
+
+    for explosion in explosions:
+        explosion.draw(screen)
+
+
+    # ======================================
+    # DRAW PLAYER
+    # ======================================
+
     player.draw(screen)
 
-    # Draw health and score
-    health_text = font.render(f"Health: {health}", True, WHITE)
-    score_text = font.render(f"Score: {score}", True, WHITE)
-    screen.blit(health_text, (10, 10))
-    screen.blit(score_text, (10, 40))
+
+    # ======================================
+    # DRAW HUD
+    # ======================================
+
+    draw_hud(
+        screen,
+        font,
+        health,
+        score
+    )
+
+
+    # ======================================
+    # DRAW GAME OVER
+    # ======================================
+
+    if game_over:
+
+        draw_game_over(
+            screen,
+            big_font,
+            font,
+            score
+        )
+
 
     # Update display
     pygame.display.flip()
 
 
-# Close game
+# ==========================================
+# CLOSE GAME
+# ==========================================
+
 pygame.quit()
 sys.exit()
