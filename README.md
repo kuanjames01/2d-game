@@ -18,3 +18,10 @@ In VS Code, choose **Python: Select Interpreter** and select that same Windows
 `.venv` interpreter. If Windows Python is installed elsewhere, replace the
 Anaconda path with its path. Running with WSL Python requires a working WSL
 audio device; a missing device cannot produce sound.
+
+## Test the first boss fight
+
+Start the game and survive until the Meteor Destroyer appears after 30 seconds.
+Move with the arrow keys or **WASD** and keep shooting; the player fires
+automatically. Dodge both the falling meteor rain and the faster aimed barrage.
+Defeating the boss awards 500 points, after which normal meteor spawning resumes.

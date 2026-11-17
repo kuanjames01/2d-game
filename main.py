@@ -13,14 +13,20 @@ from game.settings import (
     METEOR_SPAWN_INTERVAL,
     PLAYER_HEALTH,
     METEOR_SCORE,
-    BULLET_FIRE_INTERVAL
+    BULLET_FIRE_INTERVAL,
+    BOSS_START_TIME,
+    BOSS_SCORE
 )
 
 from game.player import Player
 from game.bullet import Bullet
 from game.meteor import Meteor
+from game.boss import MeteorDestroyer
 from game.explosion import Explosion
-from game.collision import check_bullet_meteor_collisions
+from game.collision import (
+    check_bullet_boss_collisions,
+    check_bullet_meteor_collisions
+)
 from game.ui import draw_hud, draw_game_over
 from game.audio import create_game_sounds
 
@@ -100,6 +106,8 @@ player = None
 bullets = []
 meteors = []
 explosions = []
+boss = None
+boss_started = False
 
 health = PLAYER_HEALTH
 score = 0
@@ -121,6 +129,8 @@ def reset_game():
     global bullets
     global meteors
     global explosions
+    global boss
+    global boss_started
 
     global health
     global score
@@ -136,6 +146,8 @@ def reset_game():
     bullets = []
     meteors = []
     explosions = []
+    boss = None
+    boss_started = False
 
     health = PLAYER_HEALTH
     score = 0
@@ -230,18 +242,28 @@ while running:
 
 
         # ----------------------------------
-        # SPAWN METEORS
+        # START THE BOSS FIGHT
         # ----------------------------------
-
-        meteor_spawn_timer += dt * 1000
         elapsed_time += dt
 
-        if meteor_spawn_timer >= METEOR_SPAWN_INTERVAL:
-
-            meteors.append(Meteor(elapsed_time))
-
+        if not boss_started and elapsed_time >= BOSS_START_TIME:
+            boss = MeteorDestroyer()
+            boss_started = True
             meteor_spawn_timer = 0
 
+
+        # SPAWN NORMAL METEORS
+        # ----------------------------------
+
+        if boss is None:
+
+            meteor_spawn_timer += dt * 1000
+
+            if meteor_spawn_timer >= METEOR_SPAWN_INTERVAL:
+
+                meteors.append(Meteor(elapsed_time))
+
+                meteor_spawn_timer = 0
 
         # ----------------------------------
         # UPDATE METEORS
@@ -270,6 +292,22 @@ while running:
         # ----------------------------------
 
         score += len(destroyed_meteors) * METEOR_SCORE
+
+
+        # ----------------------------------
+        # UPDATE BOSS
+        # ----------------------------------
+
+        if boss is not None:
+
+            if check_bullet_boss_collisions(bullets, boss):
+
+                score += BOSS_SCORE
+                boss = None
+
+            else:
+
+                boss.update(dt, player, meteors, elapsed_time)
 
 
         # ----------------------------------
@@ -354,6 +392,9 @@ while running:
 
     for meteor in meteors:
         meteor.draw(screen)
+
+    if boss is not None:
+        boss.draw(screen, font)
 
 
     # ======================================

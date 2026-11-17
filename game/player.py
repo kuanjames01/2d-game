@@ -1,24 +1,50 @@
 
 import pygame
+import os
+
 from game.settings import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
-    PLAYER_SPEED,
-    BLUE
+    PLAYER_SPEED
 )
 
 
 class Player:
 
     def __init__(self):
-        self.width = 50
-        self.height = 50
 
-        self.rect = pygame.Rect(
-            SCREEN_WIDTH // 2 - self.width // 2,
-            SCREEN_HEIGHT - 100,
-            self.width,
-            self.height
+        self.width = 70
+        self.height = 70
+
+        # Get project directory
+        BASE_PATH = os.path.dirname(os.path.dirname(__file__))
+
+        # Spaceship image path
+        IMAGE_PATH = os.path.join(
+            BASE_PATH,
+            "assets",
+            "images",
+            "spaceship.png"
+        )
+
+        # Load spaceship
+        self.image = pygame.image.load(IMAGE_PATH)
+
+        # Preserve transparency and optimize after display initialization
+        if pygame.display.get_surface() is not None:
+            self.image = self.image.convert_alpha()
+
+        self.image = pygame.transform.smoothscale(
+            self.image,
+            (self.width, self.height)
+        )
+
+        # Set spaceship position
+        self.rect = self.image.get_rect(
+            center=(
+                SCREEN_WIDTH // 2,
+                SCREEN_HEIGHT - 100
+            )
         )
 
         self.speed = PLAYER_SPEED
@@ -39,21 +65,17 @@ class Player:
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             self.rect.y += self.speed * dt
 
-        # Keep player inside the screen
+        # Keep player inside screen
         self.rect.clamp_ip(
-            pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+            pygame.Rect(
+                0,
+                0,
+                SCREEN_WIDTH,
+                SCREEN_HEIGHT
+            )
         )
 
     def draw(self, screen):
 
         # Draw spaceship
-        pygame.draw.polygon(
-            screen,
-            BLUE,
-            [
-                (self.rect.centerx, self.rect.top),
-                (self.rect.left, self.rect.bottom),
-                (self.rect.centerx, self.rect.bottom - 12),
-                (self.rect.right, self.rect.bottom)
-            ]
-        )
+        screen.blit(self.image, self.rect)

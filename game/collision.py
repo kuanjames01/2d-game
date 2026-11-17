@@ -24,3 +24,15 @@ def check_bullet_meteor_collisions(bullets, meteors):
                 break
 
     return destroyed_positions
+
+
+def check_bullet_boss_collisions(bullets, boss):
+
+    for bullet in bullets[:]:
+
+        if bullet.rect.colliderect(boss.rect):
+
+            bullets.remove(bullet)
+            boss.health -= 1
+
+    return boss.health <= 0
