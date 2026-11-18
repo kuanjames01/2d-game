@@ -57,7 +57,8 @@ class Meteor:
         y=None,
         velocity=None,
         small=False,
-        speed=None
+        speed=None,
+        speed_scale=1.0
     ):
 
         # Difficulty level
@@ -100,6 +101,8 @@ class Meteor:
                 max(1, METEOR_BASE_HEALTH - 1)
                 + difficulty_level
             )
+
+        self.speed *= speed_scale
 
         # Resize meteor image
         self.size = self.radius * 2

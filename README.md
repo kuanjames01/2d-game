@@ -19,9 +19,12 @@ In VS Code, choose **Python: Select Interpreter** and select that same Windows
 Anaconda path with its path. Running with WSL Python requires a working WSL
 audio device; a missing device cannot produce sound.
 
-## Test the first boss fight
+## Gameplay progression
 
-Start the game and survive until the Meteor Destroyer appears after 30 seconds.
 Move with the arrow keys or **WASD** and keep shooting; the player fires
-automatically. Dodge both the falling meteor rain and the faster aimed barrage.
-Defeating the boss awards 500 points, after which normal meteor spawning resumes.
+automatically. Meteor waves become faster and more frequent as the run
+progresses. Boss encounters begin after 30 seconds and recur after each boss
+defeat, up to Level 15. Each encounter uses three randomly selected abilities.
+Defeating the Level 15 boss starts Endless Survival, where meteors continue
+spawning and the HUD tracks survival time until the player's health reaches
+zero.

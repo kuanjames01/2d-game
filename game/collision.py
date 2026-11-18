@@ -33,6 +33,22 @@ def check_bullet_boss_collisions(bullets, boss):
         if bullet.rect.colliderect(boss.rect):
 
             bullets.remove(bullet)
-            boss.health -= 1
+            boss.take_damage(1)
 
     return boss.health <= 0
+
+
+def check_boss_hazard_collisions(player, hazards):
+
+    damage = 0
+
+    for hazard in hazards[:]:
+
+        if hazard.collides_with(player):
+
+            damage += hazard.damage
+
+            if hazard.kind in ("projectile", "homing"):
+                hazards.remove(hazard)
+
+    return damage

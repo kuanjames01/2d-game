@@ -1,6 +1,7 @@
 
 import pygame
 import random
+import math
 import sys
 
 from game.settings import (
@@ -15,7 +16,8 @@ from game.settings import (
     METEOR_SCORE,
     BULLET_FIRE_INTERVAL,
     BOSS_START_TIME,
-    BOSS_SCORE
+    BOSS_SCORE,
+    BOSS_MAX_LEVEL
 )
 
 from game.player import Player
@@ -24,6 +26,7 @@ from game.meteor import Meteor
 from game.boss import MeteorDestroyer
 from game.explosion import Explosion
 from game.collision import (
+    check_boss_hazard_collisions,
     check_bullet_boss_collisions,
     check_bullet_meteor_collisions
 )
@@ -106,8 +109,12 @@ player = None
 bullets = []
 meteors = []
 explosions = []
+boss_projectiles = []
 boss = None
-boss_started = False
+boss_level = 1
+next_boss_time = BOSS_START_TIME
+endless_mode = False
+endless_survival_time = 0
 
 health = PLAYER_HEALTH
 score = 0
@@ -129,8 +136,12 @@ def reset_game():
     global bullets
     global meteors
     global explosions
+    global boss_projectiles
     global boss
-    global boss_started
+    global boss_level
+    global next_boss_time
+    global endless_mode
+    global endless_survival_time
 
     global health
     global score
@@ -146,8 +157,12 @@ def reset_game():
     bullets = []
     meteors = []
     explosions = []
+    boss_projectiles = []
     boss = None
-    boss_started = False
+    boss_level = 1
+    next_boss_time = BOSS_START_TIME
+    endless_mode = False
+    endless_survival_time = 0
 
     health = PLAYER_HEALTH
     score = 0
@@ -157,6 +172,42 @@ def reset_game():
     elapsed_time = 0
 
     game_over = False
+
+
+def spawn_meteor_wave(elapsed_time):
+
+    wave_size = min(3, 1 + int(elapsed_time // 60))
+    speed_scale = 1 + 0.45 * math.log1p(elapsed_time / 120)
+
+    if wave_size == 1:
+        x_positions = [random.randint(30, SCREEN_WIDTH - 30)]
+    elif wave_size == 2:
+        center_x = random.randint(60, SCREEN_WIDTH - 60)
+        spread = random.randint(35, 75)
+        x_positions = [
+            max(30, min(SCREEN_WIDTH - 30, center_x - spread)),
+            max(30, min(SCREEN_WIDTH - 30, center_x + spread))
+        ]
+    else:
+        center_x = random.randint(70, SCREEN_WIDTH - 70)
+        spread = random.randint(45, 85)
+        x_positions = [
+            max(30, center_x - spread),
+            center_x,
+            min(SCREEN_WIDTH - 30, center_x + spread)
+        ]
+
+    staggered = wave_size > 1 and random.random() < 0.5
+
+    for index, x in enumerate(x_positions):
+        meteor = Meteor(
+            elapsed_time,
+            x=x,
+            speed_scale=speed_scale
+        )
+        if staggered:
+            meteor.rect.bottom = -index * 55
+        meteors.append(meteor)
 
 
 # Start game
@@ -246,24 +297,29 @@ while running:
         # ----------------------------------
         elapsed_time += dt
 
-        if not boss_started and elapsed_time >= BOSS_START_TIME:
-            boss = MeteorDestroyer()
-            boss_started = True
-            meteor_spawn_timer = 0
-
+        if (
+            boss is None
+            and not endless_mode
+            and boss_level <= BOSS_MAX_LEVEL
+            and elapsed_time >= next_boss_time
+        ):
+            boss = MeteorDestroyer(level=boss_level)
 
         # SPAWN NORMAL METEORS
         # ----------------------------------
 
-        if boss is None:
+        meteor_spawn_timer += dt * 1000
 
-            meteor_spawn_timer += dt * 1000
+        spawn_interval = max(
+            350,
+            METEOR_SPAWN_INTERVAL / (1 + elapsed_time / 180)
+        )
 
-            if meteor_spawn_timer >= METEOR_SPAWN_INTERVAL:
+        if meteor_spawn_timer >= spawn_interval:
 
-                meteors.append(Meteor(elapsed_time))
+            spawn_meteor_wave(elapsed_time)
 
-                meteor_spawn_timer = 0
+            meteor_spawn_timer -= spawn_interval
 
         # ----------------------------------
         # UPDATE METEORS
@@ -302,12 +358,43 @@ while running:
 
             if check_bullet_boss_collisions(bullets, boss):
 
-                score += BOSS_SCORE
+                defeated_level = boss.level
+                score += BOSS_SCORE * defeated_level
                 boss = None
+                if defeated_level >= BOSS_MAX_LEVEL:
+                    endless_mode = True
+                    endless_survival_time = 0
+                else:
+                    boss_level = defeated_level + 1
+                    next_boss_time = elapsed_time + BOSS_START_TIME
 
             else:
 
-                boss.update(dt, player, meteors, elapsed_time)
+                boss.update(
+                    dt,
+                    player,
+                    meteors,
+                    elapsed_time,
+                    boss_projectiles
+                )
+
+        # ----------------------------------
+        # UPDATE BOSS ATTACKS
+        # ----------------------------------
+
+        for hazard in boss_projectiles[:]:
+            hazard.update(dt, player)
+            if hazard.is_finished():
+                boss_projectiles.remove(hazard)
+
+        hazard_damage = check_boss_hazard_collisions(
+            player,
+            boss_projectiles
+        )
+
+        if hazard_damage:
+            health = max(0, health - hazard_damage)
+            sounds["damage"].play()
 
 
         # ----------------------------------
@@ -348,6 +435,9 @@ while running:
         if health <= 0:
 
             game_over = True
+
+        if endless_mode:
+            endless_survival_time += dt
 
 
     # ======================================
@@ -393,6 +483,9 @@ while running:
     for meteor in meteors:
         meteor.draw(screen)
 
+    for hazard in boss_projectiles:
+        hazard.draw(screen)
+
     if boss is not None:
         boss.draw(screen, font)
 
@@ -420,7 +513,8 @@ while running:
         screen,
         font,
         health,
-        score
+        score,
+        endless_survival_time if endless_mode else None
     )
 
 
